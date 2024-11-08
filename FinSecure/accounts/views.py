@@ -16,6 +16,7 @@ from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 import base64
 import json
+from datetime import datetime
 
 
 def encrypt_data(data, key):
@@ -84,7 +85,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.forms import ValidationError
 
-@login_required
+# @login_required
 def submit_financial_data(request):
     if 'encryption_key' not in request.session:
         key = Fernet.generate_key()
@@ -252,6 +253,8 @@ def dashboard(request):
 
 import math
 
+
+# @login_required
 def fire_number(request):
     # retrieving encryption key from session
     key = request.session['encryption_key']
@@ -267,68 +270,90 @@ def fire_number(request):
 
     f = Fernet(key.encode())
 
-    # decrypting data
+
     monthly_income = int(f.decrypt(income_instance.monthly_income.encode()).decode())
     employer_contributions = int(f.decrypt(income_instance.employer_contributions.encode()).decode())
     monthly_expenses = int(f.decrypt(expenses_instance.monthly_expenses.encode()).decode())
-    annual_expenses = int(f.decrypt(expenses_instance.annual_expenses.encode()).decode())
     one_time_expenses = int(f.decrypt(expenses_instance.one_time_expenses.encode()).decode())
     current_savings = int(f.decrypt(savings_instance.current_savings.encode()).decode())
     return_on_investments = float(f.decrypt(savings_instance.return_on_investments.encode()).decode()) / 100
     liabilities = int(f.decrypt(assets_instance.liabilities.encode()).decode())
     other_assets = int(f.decrypt(assets_instance.other_assets.encode()).decode())
 
-    # incorporating financial goals (retirement lifestyle)
+
     if financial_goals_instance.retirement_lifestyle == 'luxurious':
         fire_multiple = 30
     elif financial_goals_instance.retirement_lifestyle == 'frugal':
         fire_multiple = 20
-    else:  # moderate, comfortable
+    else: 
         fire_multiple = 25
 
-    # FIRE number calculation adjusted for lifestyle
+
     fire_number = (monthly_expenses * 12) * fire_multiple
 
-    # accounting for inflation (6% annual)
+
     inflation_rate = 0.06
 
-    # factoring in employer contributions to savings
+
     monthly_income += employer_contributions
 
-    # years to fire calculation with projected income growth
+
     expected_salary_growth = float(f.decrypt(income_instance.expected_salary_growth.encode()).decode()) / 100
-    years_to_fire = (fire_number - current_savings) / (monthly_income * 12)
 
-    # adjust for inflation over the years to FIRE
-    fire_number_adjusted = fire_number * math.pow((1 + inflation_rate), years_to_fire)
 
-    # including one-time expenses and liabilities
     net_assets = other_assets - liabilities - one_time_expenses
 
-    # projected savings growth considering return on investments
-    projected_savings_growth = current_savings * math.pow((1 + return_on_investments), years_to_fire)
 
-    # final years to FIRE calculation, including salary growth and savings
-    if expected_salary_growth > 0:
-        # salary grows, so we estimate the future income and adjust the calculation
+    projected_savings_growth = current_savings * math.pow((1 + return_on_investments), 1)
+
+
+    years_to_fire = 0
+    net_worth_over_years = []
+    current_year = datetime.now().year
+    net_worth = current_savings + net_assets
+    fire_number_adjusted = fire_number
+
+    
+    max_years_limit = 100
+
+    
+    while net_worth < fire_number_adjusted and years_to_fire < max_years_limit:
+       
+        years_to_fire += 1
+
+        
         future_income = monthly_income * math.pow((1 + expected_salary_growth), years_to_fire)
-        years_to_fire = (fire_number_adjusted - projected_savings_growth) / (future_income * 12)
-    else:
-        # no salary growth
-        years_to_fire = (fire_number_adjusted - projected_savings_growth) / (monthly_income * 12)
+        annual_savings = future_income * 12 - monthly_expenses * 12
+        annual_investment_growth = net_worth * return_on_investments
 
-    # savings rate calculation
+        
+        net_worth += annual_savings + annual_investment_growth
+
+        
+        fire_number_adjusted = fire_number * (1 + inflation_rate * years_to_fire)
+
+       
+        net_worth_over_years.append({
+            'year': current_year + years_to_fire,
+            'net_worth': int(net_worth),
+        })
+
     savings_rate = (current_savings / (monthly_income * 12)) * 100
+
+    for year in net_worth_over_years:
+        print(year)
+        print(net_worth)
 
     context = {
         'fire_number': int(fire_number_adjusted),
-        'years_to_fire': int(years_to_fire),
+        'years_to_fire': years_to_fire,
         'savings_rate': int(savings_rate),
         'net_assets': net_assets,
-        'projected_savings_growth': int(projected_savings_growth),
+        'net_worth_over_years': net_worth_over_years,
     }
 
     return render(request, 'fire_number.html', context)
+
 
 # @login_required
 # def submit_financial_data(request):
